@@ -11,17 +11,105 @@ exports.setting = function() {
 		middlewares: [
 			{ name: 'commonAPI' },
 			{ name: 'bindModel' }
-		] 
+		]
 	};
 }
 
-exports.main = function(req, res) {
-	var tasks = new Tasks(req, res);
+exports.main = function() {
+	var that = this;
+	var arg = process.argv.splice(2);
+	var args = {
+		"id": arg[0],
+		"curriculum": arg[1],
+		"nickname": arg[2],
+		"score": arg[3]
+	};
+
+	orm.connect("mysql://csk6124:2682293@localhost/jarvis_admin", function (err, db) {
+		//console.log(err,  db);
+		var tasks = new Tasks(db, args);
+	});
 };
 
-var Tasks = function(req, res) {
-	this.req = req;
-	this.res = res;
+var Tasks = function(db, args) {
+	this.db = db;
+	this.args = args;
+	this.model = {};
+	console.log('db', this.db);
+	this.model.LeagueClass= this.db.define("league_class", {
+		name: {type: 'text'},
+		level: {type: 'enum', values: ["Excellent", "Awesome", "Cool", "Nice", "Good"]},
+		img_url: {type: 'text'},
+		description: {type: 'text'}
+	}, {
+		method: {
+
+		}, 
+		hooks: {
+
+		},
+		timestamp: true,
+		cache: false
+	});
+
+	this.model.LeagueRank = this.db.define("league_rank", {
+		user_id: {type: 'number'},
+		cal_score_before: {type: 'number'},
+		cal_score: {type: 'number'},
+		curriculum: {type: 'number'},
+		count: {type: 'number'},
+		teamId: {type: 'number'}
+	}, {
+		method: {
+
+		}, 
+		hooks: {
+
+		},
+		timestamp: true,
+		cache: false
+	});
+
+	this.model.LeagueScore = this.db.define("league_score", {
+		user_id: {type: 'number'},
+		score: {type: 'text'},
+		curriculum: {type: 'number'}
+	}, {
+		method: {
+
+		}, 
+		hooks: {
+
+		},
+		timestamp: true,
+		cache: false
+	});
+
+	this.model.LeagueTeam = this.db.define("league_team", {
+		name1: {type: 'text'},
+		name2: {type: 'text'},
+		classId: {type: 'number'},
+		total: {type: 'number'},
+		description: {type: 'text'}
+	}, {
+		method: {
+
+		}, 
+		hooks: {
+
+		},
+		timestamp: true,
+		cache: false
+	});
+
+	/*
+	this.model.LeagueClass.sync();
+	this.model.LeagueRank.sync();
+	this.model.LeagueScore.sync();
+	this.model.LeagueTeam.sync();
+	*/
+
+
 	this.adjectives = [	
 		"간지러운", 
 		"반짝이는", 
@@ -55,11 +143,10 @@ var _ = Tasks.prototype;
 
 _.initialize = function() {
 	var that = this;
-	this.model = that.req.app.get('server').model;
 
 	async.series(
 		[
-			this.registerLeagueRank(this.req.input)
+			this.registerLeagueRank(that.args)
 		],
 		function(err,result) {
 			if(!result) {
@@ -67,7 +154,7 @@ _.initialize = function() {
 				return;
 			}
 			console.log('result', result);
-			that.req.success();
+			//that.req.success();
 		}
 	);
 
@@ -95,7 +182,21 @@ _.getUserInfo = function(lessonInfo) {
 	var that = this;
 	
 	return function(callback) {
+		var user = {
+			score: 0,
+			cal_score: 0,
+			classId: 0,
+			rankObject: null
+		};
+		user.userId = lessonInfo.id;
+		user.curriculum = lessonInfo.curriculum;
+		user.nickname = lessonInfo.nickname;
+		user.score = lessonInfo.score;
+		callback(null, user)
+
+
 		// 사용자 정보 
+		/*
 		that.model.User.find({"account":lessonInfo.userId}, 1, function(err, result) {
 			console.log('getUserInfo', JSON.stringify(result));
 
@@ -115,6 +216,7 @@ _.getUserInfo = function(lessonInfo) {
 				callback(null, user)
 			}
 		});
+*/
 	};
 	
 };

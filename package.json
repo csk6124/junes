@@ -1,0 +1,18 @@
+{
+	"name": "june",
+	"version": "1.0.0",
+	"private": false,
+	"dependencies": {
+		"sprintf": "*",
+		"async": "*",
+		"password-hash": "*",
+		"request": "*",
+		"s3": "*",
+		"formidable": "*",
+		"orm": "*",
+		"mysql": "*",
+		"optimist": "*",
+		"fs-extra": "*",
+		"pubsub.js" : "*"
+	}
+}
