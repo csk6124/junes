@@ -156,13 +156,6 @@ _._getCalculateScore = function() {
 _._getClassLevel = function() {
 	var that = this;
 
-	var getLevel = function(name, callback) {
-		that.model.LeagueClass.find({"name": name}, function(err, classObject) {
-			console.log('getLevel %d', classObject[0].id, JSON.stringify(classObject));
-			callback(classObject[0].id);
-		});
-	};
-
 	var insertLeagueScore = function(user, callback) {
 		that.model.LeagueScore.create([{
 			"user_id": user.userId,
@@ -233,36 +226,35 @@ _._getClassLevel = function() {
 
 	var proc = function(user, rankObject, callback) {
 		if(rankObject.length === 1) {
-			getLevel("Excellent", function(classId) {
-				user.classId = classId;
-				user.teamId = rankObject[0].teamId;
+			// 클래스 레벨 업데이트
+			if(user.classId !== rankObject[0].classId) {
 				user.cal_score_before = rankObject[0].cal_score;
 				user.rankObject = rankObject;
 
 				// 사용자의 레벨이 변경시 
-				/*
 				makeTeam(user, function(err, teamId) {
 					user.teamId = teamId;
 					updateLeagueRank(user, rankObject, function() {
 						callback(null, 'done');
 					});
 				});
-				*/
+			} else {
+				user.classId = rankObject[0].classId;
+				user.teamId = rankObject[0].teamId;
+				user.cal_score_before = rankObject[0].cal_score;
+				user.rankObject = rankObject;
 				updateLeagueRank(user, rankObject, function() {
 					callback(null, 'done');
 				});
-			});
+			}
+			
 		} else {
-			getLevel("Excellent", function(classId) {
-				console.log('getLevel callback %d', classId);
-				user.classId = classId;
-				user.teamId = null;
-				user.cal_score_before = user.cal_score;
-				makeTeam(user, function(err, teamId) {
-					user.teamId = teamId;
-					insertLeagueRank(user, function(err, result) {
-						callback(null, 'done');
-					});
+			user.teamId = null;
+			user.cal_score_before = user.cal_score;
+			makeTeam(user, function(err, teamId) {
+				user.teamId = teamId;
+				insertLeagueRank(user, function(err, result) {
+					callback(null, 'done');
 				});
 			});
 		}
@@ -273,15 +265,46 @@ _._getClassLevel = function() {
 		that.model.LeagueRank.count(function(err, totalCount) {
 			that.model.LeagueRank.count({"cal_score":orm.gt(user.cal_score)}, function(err, count) {
 				console.log('total rank %d/%d count', count, totalCount);
-				that.model.LeagueRank.find({"user_id": user.userId}, function(err, rankObject) {
-					console.log('rank', JSON.stringify(rankObject, rankObject.length));	
-					proc(user, rankObject, function(err, result) {
-						callback(null, 'done');
+				
+				that._calculateLevel(totalCount, count, function(classId, level) {
+					user.classId = classId;
+					user.level = level;
+					that.model.LeagueRank.find({"user_id": user.userId}, function(err, rankObject) {
+						console.log('rank', JSON.stringify(rankObject, rankObject.length));	
+						proc(user, rankObject, function(err, result) {
+							callback(null, 'done');
+						});
 					});
 				});
 			});
 		});
 	};
+
+};
+
+
+_._calculateLevel = function(totalCount, count, callback) {
+	// 계급을 구한다 
+	var divide = totalCount / 5,
+		level = "Good";
+
+	if(divide <= count) {
+		level = "Excellent";
+	} else if(divide * 2 <= count) {
+		level = "Awesome";
+	} else if(divide * 3 <= count) {
+		level = "Cool";
+	} else if(divide * 4 <= count) {
+		level = "Nice";
+	} else 
+		level = "Good";
+	}
+
+	that.model.LeagueClass.find({"name": level}, function(err, classObject) {
+		console.log('getLevel %d', classObject[0].id, JSON.stringify(classObject));
+		callback(classObject[0].id, level);
+	});
+
 };
 
 
