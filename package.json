@@ -13,6 +13,7 @@
 		"mysql": "*",
 		"optimist": "*",
 		"fs-extra": "*",
-		"pubsub.js" : "*"
+		"pubsub.js" : "*",
+		"orm-timestamps" : "*"
 	}
 }

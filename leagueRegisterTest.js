@@ -2,6 +2,7 @@
 
 var async = require('async'),
 	sprintf = require('sprintf').sprintf,
+	modts = require('orm-timestamps'),
 	orm = require('orm');
 
 exports.setting = function() {
@@ -35,7 +36,16 @@ var Tasks = function(db, args) {
 	this.db = db;
 	this.args = args;
 	this.model = {};
-	console.log('db', this.db);
+	//console.log('db', this.db);
+
+	this.db.use(modts, {
+		createdProperty: 'created_at',
+		modifiedProperty: 'modified_at',
+		dbtype: { type: 'date', time: true },
+		now: function() { return new Date(); }
+	});
+
+
 	this.model.LeagueClass= this.db.define("league_class", {
 		name: {type: 'text'},
 		level: {type: 'enum', values: ["Excellent", "Awesome", "Cool", "Nice", "Good"]},
@@ -48,7 +58,7 @@ var Tasks = function(db, args) {
 		hooks: {
 
 		},
-		timestamp: true,
+		timestamp: false,
 		cache: false
 	});
 
@@ -72,14 +82,14 @@ var Tasks = function(db, args) {
 
 	this.model.LeagueScore = this.db.define("league_score", {
 		user_id: {type: 'number'},
-		score: {type: 'text'},
+		score: {type: 'number'},
+		cal_score: {type: 'number'},
 		curriculum: {type: 'number'}
 	}, {
 		method: {
 
 		}, 
 		hooks: {
-
 		},
 		timestamp: true,
 		cache: false
@@ -102,14 +112,16 @@ var Tasks = function(db, args) {
 		cache: false
 	});
 
-	/*
-	this.model.LeagueClass.sync();
+	this.model.LeagueTeam.hasOne("class", this.model.LeagueClass);
+	this.model.LeagueRank.hasOne("team", this.model.LeagueTeam);
+
+	
+	//this.model.LeagueClass.sync();
 	this.model.LeagueRank.sync();
 	this.model.LeagueScore.sync();
 	this.model.LeagueTeam.sync();
-	*/
-
-
+	
+	
 	this.adjectives = [	
 		"간지러운", 
 		"반짝이는", 
@@ -135,6 +147,8 @@ var Tasks = function(db, args) {
 		"풍선"
 	];
 
+	
+
 	this.initialize();
 };
 
@@ -146,7 +160,8 @@ _.initialize = function() {
 
 	async.series(
 		[
-			this.registerLeagueRank(that.args)
+			//this.registerLeagueRank(that.args)
+			this.getLeagueInfo(that.args)
 		],
 		function(err,result) {
 			if(!result) {
@@ -164,7 +179,7 @@ _.initialize = function() {
 // 리그 점수 등록
 _.registerLeagueRank = function(lessonInfo) {
 	var that = this;
-
+	if(lessonInfo.score === 'undefiend') return;
 	return function(callback) {
 		async.waterfall([
 			that.getUserInfo(lessonInfo),
@@ -226,7 +241,7 @@ _._getCalculateScore = function() {
 	var that = this;
 
 	return function(user, callback) {
-		that.model.LeagueScore.find({"user_id": user.userId}, function(err, scoreObject) {
+		that.model.LeagueScore.find({"user_id": user.userId, "curriculum": user.curriculum}, ["created_at", "Z"], function(err, scoreObject) {
 			console.log('scoreObject', JSON.stringify(scoreObject));
 			var scores = [];
 			scores.push(user.score);
@@ -262,6 +277,7 @@ _._getClassLevel = function() {
 		that.model.LeagueScore.create([{
 			"user_id": user.userId,
 			"score": user.score,
+			"cal_score": user.cal_score,
 			"curriculum": user.curriculum
 		}], function(err, items) {
 			console.log('insertLeagueScore', err, JSON.stringify(items));
@@ -368,7 +384,7 @@ _._getClassLevel = function() {
 			that.model.LeagueRank.count({"cal_score":orm.gt(user.cal_score)}, function(err, count) {
 				console.log('total rank %d/%d count', count, totalCount);
 		
-				that.model.LeagueRank.find({"user_id": user.userId}, function(err, rankObject) {
+				that.model.LeagueRank.find({"user_id": user.userId, "curriculum": user.curriculum}, function(err, rankObject) {
 					that._calculateLevel(rankObject, totalCount, count, function(classId, level) {
 						user.classId = classId;
 						user.level = level;
@@ -466,6 +482,91 @@ _._calculateLeageScore = function(scores) {
 	console.log('after calculation', length, calculation_score);
 	return calculation_score;
 
+};
+
+
+
+
+
+
+
+_.getLeagueInfo = function(user) {
+	var that = this;
+	/*
+	async.waterfall([
+		that.getUserInfo(),
+		that._getCalculateScore(),
+		that._getClassLevel()
+	], function(err, result) {
+		callback(null, true);
+	});
+	*/
+
+};
+
+
+_._getUserInfo = function() {
+	var that = this;
+
+	return function(callback) {
+		var leagueInfo = {
+			"img_url" : null,
+	        "team": "겁이 많은 풍선",
+	        "difference" : 10,
+	        "rank": 1,
+	        "rank_total":50,
+	        "score": 92.11
+		}
+		that.req.out('user_info', leagueInfo);
+		callback(null, true);
+	};
+
+};
+
+_.getLeagueScores = function(user) {
+	var that = this;
+	console.log('user', user);
+
+	return function(callback) {
+		var scores = [];
+		that.model.LeagueScore.find({"user_id":user.id, "curriculum":user.curriculum}, ["created_at", "A"], function(err, scores) {
+			var result = [];
+			scores.forEach(function(score) {
+				var timestamp = new Date(score.created_at);
+				result.push({"score": score.score, "timestamp": timestamp.getTime()});
+			});
+			console.log('scores', err, JSON.stringify(result));
+		});
+	};
+
+};
+
+_._getLeagueRanks = function() {
+	var that = this;
+
+	return function(callback) {
+		var scores = [];
+		that.model.LeagueRank.find({"teamId":user.teamId}, ["created_at", "A"], function(err, scores) {
+			var result = [];
+			scores.forEach(function(score) {
+				var timestamp = new Date(score.created_at);
+				result.push({"score": score.score, "timestamp": timestamp.getTime()});
+			});
+			console.log('scores', err, JSON.stringify(result));
+		});
+	};
+
+
+	return function(callback) {
+		var ranks = [
+			{"difference":10, "rank":1, "nickname": "AAA", "score":92.11, "location": "서울시 성북구"},
+			{"difference":-2, "rank":2, "nickname": "BBB", "score":82.11, "location": "서울시 동작구"},
+			{"difference":-10, "rank":3, "nickname": "CCC", "score":72.11, "location": "서울시 동작구"},
+			{"difference":0, "rank":4, "nickname": "DDD", "score":62.11, "location": "서울시 강남구"}
+		];
+		that.req.out('league_rank_list', ranks);
+		callback(null, true);
+	};
 };
 
 

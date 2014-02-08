@@ -15,7 +15,8 @@ _._initialize = function() {
 
 	this.model = this.db.define("league_score", {
 		user_id: {type: 'number'},
-		score: {type: 'text'},
+		score: {type: 'number'},
+		cal_score: {type: 'number'},
 		curriculum: {type: 'number'}
 	}, {
 		method: {
