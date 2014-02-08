@@ -161,7 +161,7 @@ _.initialize = function() {
 	async.series(
 		[
 			//this.registerLeagueRank(that.args)
-			this.getLeagueInfo(that.args)
+			this.getUserInfo(that.args)
 		],
 		function(err,result) {
 			if(!result) {
@@ -292,7 +292,8 @@ _._getClassLevel = function() {
 			"cal_score": user.cal_score,
 			"count": 1,
 			"curriculum": user.curriculum,
-			"teamId": user.teamId
+			"teamId": user.teamId,
+			"team_id": user.teamId
 		}], function(err, items) {
 			console.log('insertLeagueRank', err, items);
 			insertLeagueScore(user, function() {
@@ -326,6 +327,7 @@ _._getClassLevel = function() {
 					"name1": that.adjectives[randomIndex],
 					"name2": that.nouns[randomIndex],
 					"classId":user.classId,
+					"class_id": user.classId,
 					"total": 1,
 					"description": null
 				}], function(err, leagueTeam) {
@@ -492,6 +494,20 @@ _._calculateLeageScore = function(scores) {
 
 _.getLeagueInfo = function(user) {
 	var that = this;
+	//this._getUserInfo();
+
+	/*
+	this.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
+		console.log('Rank', JSON.stringify(Rank));
+		Rank[0].getTeam(function(err, Team) {
+			console.log('Team', JSON.stringify(Team));
+			Team.getClass(function(err, Class) {
+				console.log('Class', JSON.stringify(Class));
+			});
+		});
+	});
+	*/
+
 	/*
 	async.waterfall([
 		that.getUserInfo(),
@@ -505,10 +521,31 @@ _.getLeagueInfo = function(user) {
 };
 
 
-_._getUserInfo = function() {
+_.getUserInfo = function(user) {
 	var that = this;
 
 	return function(callback) {
+
+		var leagueInfo = {};
+		that.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
+			console.log('Rank', JSON.stringify(Rank));
+			Rank[0].getTeam(function(err, Team) {
+				console.log('Team', JSON.stringify(Team));
+				leagueInfo.difference = Rank[0].cal_score_before;
+				leagueInfo.score = Rank[0].cal_score;
+				leagueInfo.rank = 1;
+				leagueInfo.team = Team.name1 + Team.name2;
+				leagueInfo.rank_total = Team.total;
+				Team.getClass(function(err, Class) {
+					console.log('Class', JSON.stringify(Class));
+					leagueInfo.img_url = Class.img_url;
+
+					console.log('leagueInfo', JSON.stringify(leagueInfo));
+				});
+			});
+		});
+
+		/*
 		var leagueInfo = {
 			"img_url" : null,
 	        "team": "겁이 많은 풍선",
@@ -519,6 +556,7 @@ _._getUserInfo = function() {
 		}
 		that.req.out('user_info', leagueInfo);
 		callback(null, true);
+		*/
 	};
 
 };
