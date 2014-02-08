@@ -160,8 +160,8 @@ _.initialize = function() {
 
 	async.series(
 		[
-			//this.registerLeagueRank(that.args)
-			this.getUserInfo(that.args)
+			this.getLeague(that.args)
+			//this.getLeagueRanks(that.args)
 		],
 		function(err,result) {
 			if(!result) {
@@ -489,122 +489,87 @@ _._calculateLeageScore = function(scores) {
 
 
 
-
-
-
-_.getLeagueInfo = function(user) {
+_.getLeague = function(user) {
 	var that = this;
-	//this._getUserInfo();
 
-	/*
-	this.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
-		console.log('Rank', JSON.stringify(Rank));
-		Rank[0].getTeam(function(err, Team) {
-			console.log('Team', JSON.stringify(Team));
-			Team.getClass(function(err, Class) {
-				console.log('Class', JSON.stringify(Class));
-			});
-		});
+	that.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
+		async.waterfall(
+			[
+				that._getLeagueScores(Rank[0]),
+				that._getLeagueRanks(Rank[0])
+			],
+			function(err,result) {
+				if(!result) {
+					that.req.error(that.res, err);
+					return;
+				}
+				console.log('result', result);
+				//that.req.success();
+			}
+		);	
 	});
-	*/
-
-	/*
-	async.waterfall([
-		that.getUserInfo(),
-		that._getCalculateScore(),
-		that._getClassLevel()
-	], function(err, result) {
-		callback(null, true);
-	});
-	*/
 
 };
 
 
-_.getUserInfo = function(user) {
+_._getLeagueScores = function(Rank) {
 	var that = this;
 
+	var result = [];
 	return function(callback) {
+		that.model.LeagueScore.find({"user_id":Rank.user_id, "curriculum":Rank.curriculum}, ["created_at", "A"], function(err, scores) {
+			scores.forEach(function(score) {
+				var timestamp = new Date(score.created_at);
+				result.push({"score": score.score, "timestamp": timestamp.getTime()});
+			});
+			
+			callback(null, result);
+		});
+	};
 
-		var leagueInfo = {};
-		that.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
-			console.log('Rank', JSON.stringify(Rank));
-			Rank[0].getTeam(function(err, Team) {
-				console.log('Team', JSON.stringify(Team));
-				leagueInfo.difference = Rank[0].cal_score_before;
-				leagueInfo.score = Rank[0].cal_score;
-				leagueInfo.rank = 1;
-				leagueInfo.team = Team.name1 + Team.name2;
-				leagueInfo.rank_total = Team.total;
+};
+
+_._getLeagueRanks = function(Rank) {
+	var that = this;
+
+	var result = {
+		"ranks": [],
+		"userInfo": {},
+		"rankObj": null,
+		"index": null
+	};
+	return function(scores, callback) {
+		result.scores = scores;
+		that.model.LeagueRank.find({"teamId":Rank.team_id}, ["cal_score", "Z"], function(err, Ranks) {
+			Ranks.forEach(function(r, index) {
+				result.ranks.push({
+					"difference": r.cal_score_before,
+					"rank": index+1,
+					"nickname": "nickname",
+					"score": r.cal_score,
+					"location": "location"
+				});
+				if(r.user_id === Rank.user_id) {
+					result.rankObj = r;
+					result.index = index+1;
+				}
+			});
+
+			result.rankObj.getTeam(function(err, Team) {
+				result.userInfo.difference = result.rankObj.cal_score_before;
+				result.userInfo.score = result.rankObj.cal_score;
+				result.userInfo.rank = result.index;
+				result.userInfo.team = Team.name1 + Team.name2;
+				result.userInfo.rank_total = Team.total;
 				Team.getClass(function(err, Class) {
-					console.log('Class', JSON.stringify(Class));
-					leagueInfo.img_url = Class.img_url;
-
-					console.log('leagueInfo', JSON.stringify(leagueInfo));
+					result.userInfo.img_url = Class.img_url;
+					callback(null, result);
 				});
 			});
-		});
 
-		/*
-		var leagueInfo = {
-			"img_url" : null,
-	        "team": "겁이 많은 풍선",
-	        "difference" : 10,
-	        "rank": 1,
-	        "rank_total":50,
-	        "score": 92.11
-		}
-		that.req.out('user_info', leagueInfo);
-		callback(null, true);
-		*/
-	};
-
-};
-
-_.getLeagueScores = function(user) {
-	var that = this;
-	console.log('user', user);
-
-	return function(callback) {
-		var scores = [];
-		that.model.LeagueScore.find({"user_id":user.id, "curriculum":user.curriculum}, ["created_at", "A"], function(err, scores) {
-			var result = [];
-			scores.forEach(function(score) {
-				var timestamp = new Date(score.created_at);
-				result.push({"score": score.score, "timestamp": timestamp.getTime()});
-			});
-			console.log('scores', err, JSON.stringify(result));
 		});
 	};
 
-};
-
-_._getLeagueRanks = function() {
-	var that = this;
-
-	return function(callback) {
-		var scores = [];
-		that.model.LeagueRank.find({"teamId":user.teamId}, ["created_at", "A"], function(err, scores) {
-			var result = [];
-			scores.forEach(function(score) {
-				var timestamp = new Date(score.created_at);
-				result.push({"score": score.score, "timestamp": timestamp.getTime()});
-			});
-			console.log('scores', err, JSON.stringify(result));
-		});
-	};
-
-
-	return function(callback) {
-		var ranks = [
-			{"difference":10, "rank":1, "nickname": "AAA", "score":92.11, "location": "서울시 성북구"},
-			{"difference":-2, "rank":2, "nickname": "BBB", "score":82.11, "location": "서울시 동작구"},
-			{"difference":-10, "rank":3, "nickname": "CCC", "score":72.11, "location": "서울시 동작구"},
-			{"difference":0, "rank":4, "nickname": "DDD", "score":62.11, "location": "서울시 강남구"}
-		];
-		that.req.out('league_rank_list', ranks);
-		callback(null, true);
-	};
 };
 
 
