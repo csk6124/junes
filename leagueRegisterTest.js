@@ -532,12 +532,14 @@ _._getLeagueScores = function(Rank) {
 _._getLeagueRanks = function(Rank) {
 	var that = this;
 
-	var result = {
-		"ranks": [],
-		"userInfo": {},
-		"rankObj": null,
-		"index": null
-	};
+	var rankObj = null,
+		index = null,
+		result = {
+			"ranks": [],
+			"userInfo": {},
+			"scores": null
+		};
+
 	return function(scores, callback) {
 		result.scores = scores;
 		that.model.LeagueRank.find({"teamId":Rank.team_id}, ["cal_score", "Z"], function(err, Ranks) {
@@ -550,17 +552,19 @@ _._getLeagueRanks = function(Rank) {
 					"location": "location"
 				});
 				if(r.user_id === Rank.user_id) {
-					result.rankObj = r;
-					result.index = index+1;
+					rankObj = r;
+					index = index+1;
 				}
 			});
 
-			result.rankObj.getTeam(function(err, Team) {
-				result.userInfo.difference = result.rankObj.cal_score_before;
-				result.userInfo.score = result.rankObj.cal_score;
-				result.userInfo.rank = result.index;
-				result.userInfo.team = Team.name1 + Team.name2;
-				result.userInfo.rank_total = Team.total;
+			rankObj.getTeam(function(err, Team) {
+				result.userInfo = {
+					"difference": rankObj.cal_score_before,
+					"score": rankObj.cal_score,
+					"rank": index,
+					"team": Team.name1 + Team.name2,
+					"rank_total": Team.total
+				};
 				Team.getClass(function(err, Class) {
 					result.userInfo.img_url = Class.img_url;
 					callback(null, result);
