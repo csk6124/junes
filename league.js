@@ -194,7 +194,7 @@ _._getUserInfo = function() {
 			classId: 0,
 			rankObject: null
 		};
-		user.userId = that.user.user_id;
+		user.user_id = that.user.user_id;
 		user.curriculum = that.user.curriculum;
 		user.nickname = that.user.nickname;
 		user.score = that.user.score;
@@ -290,7 +290,7 @@ _._getCalculateScore = function() {
 
 	return function(callback) {
 		that.model.LeagueScore.find({
-			user_id: that.user.userId, 
+			user_id: that.user.user_id, 
 			curriculum: that.user.curriculum
 		}, ["created_at", "Z"], function(err, results) {
 			
@@ -326,7 +326,7 @@ _._getClassLevel = function() {
 
 	var insertLeagueScore = function(callback) {
 		that.model.LeagueScore.create([{
-			"user_id": that.user.userId,
+			"user_id": that.user.user_id,
 			"score": that.user.score,
 			"cal_score": that.user.cal_score,
 			"curriculum": that.user.curriculum
@@ -338,7 +338,7 @@ _._getClassLevel = function() {
 
 	var insertLeagueRank = function(callback) {
 		that.model.LeagueRank.create([{
-			"user_id": that.user.userId,
+			"user_id": that.user.user_id,
 			"cal_score_before": that.user.cal_score_before,
 			"cal_score": that.user.cal_score,
 			"count": 1,
@@ -358,9 +358,10 @@ _._getClassLevel = function() {
 		rankObject[0].cal_score_before = that.user.cal_score_before;
 		rankObject[0].curriculum = that.user.curriculum;
 		rankObject[0].teamId = that.user.teamId;
+		rankObject[0].team_id = that.user.teamId;
 		rankObject[0].count += 1;
 		rankObject[0].save(function(err) {
-			console.log('saved and err : %s', err);
+			console.log('saved and err : %s', err, JSON.stringify(rankObject[0]));
 			insertLeagueScore(function() {
 				callback(err);
 			});
@@ -441,10 +442,10 @@ _._getClassLevel = function() {
 				console.log('total rank %d/%d count', count, totalCount);
 		
 				that.model.LeagueRank.find({
-					user_id: that.user.userId, 
+					user_id: that.user.user_id, 
 					curriculum: that.user.curriculum
 				}, function(err, rankObject) {
-					that._calculateLevel(totalCount, count, function(classId, level) {
+					that._calculateLevel(totalCount + 1, count + 1, function(classId, level) {
 						that.user.classId = classId;
 						that.user.level = level;
 						console.log('rank', JSON.stringify(rankObject, rankObject.length));	
@@ -462,22 +463,24 @@ _._getClassLevel = function() {
 
 _._calculateLevel = function(totalCount, count, callback) {
 	// 계급을 구한다 
-	var divide = totalCount / 5,
+	var divide = Math.floor(totalCount / 5),
 		level = "Good";
 
-	if(divide <= count) {
+	if(divide <= 0)	divide = 1;
+
+	if(divide >= count) {
 		level = "Excellent";
-	} else if(divide * 2 <= count) {
+	} else if(divide * 2 >= count) {
 		level = "Awesome";
-	} else if(divide * 3 <= count) {
+	} else if(divide * 3 >= count) {
 		level = "Cool";
-	} else if(divide * 4 <= count) {
+	} else if(divide * 4 >= count) {
 		level = "Nice";
 	} else {
 		level = "Good";
 	}
 
-	console.log("log %d %d %s", totalCount, count, level);
+	console.log("log %d, %d %d %s", divide, totalCount, count, level);
 	this.model.LeagueClass.find({"name": level}, function(err, classObject) {
 		console.log('getLevel %d', classObject[0].id, JSON.stringify(classObject));
 		callback(classObject[0].id, level);
