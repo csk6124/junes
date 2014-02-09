@@ -1,3 +1,3 @@
-var test = require('./leagueRegisterTest');
+var test = require('./league');
 
 test.main();

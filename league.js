@@ -20,7 +20,7 @@ exports.main = function() {
 	var that = this;
 	var arg = process.argv.splice(2);
 	var args = {
-		"id": arg[0],
+		"user_id": arg[0],
 		"curriculum": arg[1],
 		"nickname": arg[2],
 		"score": arg[3]
@@ -35,6 +35,13 @@ exports.main = function() {
 var Tasks = function(db, args) {
 	this.db = db;
 	this.args = args;
+	this.user = {
+		user_id: args.user_id,
+		curriculum: args.curriculum,
+		nickname: args.nickname,
+		score: args.score
+	};
+
 	this.model = {};
 	//console.log('db', this.db);
 
@@ -179,6 +186,7 @@ _.initialize = function() {
 _._getUserInfo = function() {
 	var that = this;
 	
+	console.log('_getUserInfo');
 	return function(callback) {
 		var user = {
 			score: 0,
@@ -187,10 +195,10 @@ _._getUserInfo = function() {
 			rankObject: null
 		};
 		user.userId = that.user.user_id;
-		user.curriculum = that.user..curriculum;
-		user.nickname = that.user..nickname;
-		user.score = that.user..score;
-		callback(null, user)
+		user.curriculum = that.user.curriculum;
+		user.nickname = that.user.nickname;
+		user.score = that.user.score;
+		callback(null, true)
 
 
 		// 사용자 정보 
@@ -223,6 +231,63 @@ _._getUserInfo = function() {
 _._getCalculateScore = function() {
 	var that = this;
 
+	var calculateLeageScore = function(scores) {
+		console.log('arguments', scores);
+		var that = this;
+		var calculation_score = 0;
+		var lower_score = 0;
+		var lower_devision = 0;
+		var upper_score = 0;
+		var upper_devision = 0;
+		var length = scores.length;
+
+		// 가중치 계산처리 
+		scores.forEach(function(score, index) {
+			if(index <= 4) {		// 최근 5건의 평균 
+				switch(index) {
+					case 0:
+						lower_score += score * 1;
+						lower_devision += 1;
+						break;
+					case 1:
+						lower_score += score * 0.8;
+						lower_devision += 0.8;
+						break;
+					case 2:
+						lower_score += score * 0.6;
+						lower_devision += 0.6;
+						break;
+					case 3:
+						lower_score += score * 0.4;
+						lower_devision += 0.4;
+						break;
+					case 4:
+						lower_score += score * 0.2;
+						lower_devision += 0.2;
+						break;
+					default:
+						lower_score += score * 0.2;
+						lower_devision += 0.2;
+						break;
+				}
+			} else {				// 최근 5건을 넘는경우 8:2가중치를 두고 평균값을 계산한다. 
+				upper_score += score * 1;
+				upper_devision += 1;
+			}
+			console.log('before calculation', index, score, index, lower_score,  upper_score);
+		});
+		
+		if(length <= 5) {	
+			calculation_score = lower_score / lower_devision;
+		} else {
+			calculation_score = ((lower_score / lower_devision) * 0.8);
+			calculation_score += ((upper_score / upper_devision) * 0.2);
+		}
+		console.log('after calculation', length, calculation_score);
+		return calculation_score;
+
+	};
+
 	return function(callback) {
 		that.model.LeagueScore.find({
 			user_id: that.user.userId, 
@@ -232,15 +297,15 @@ _._getCalculateScore = function() {
 			var scores = [];
 			scores.push(that.user.score);
 			if(results.length === 0) {
-				that.user.cal_score = that._calculateLeageScore(scores);
-				callback(null, user);
+				that.user.cal_score = calculateLeageScore(scores);
+				callback(null, true);
 			} else {
 				results.forEach(function(val) {
 					console.log('score array', val.score);
 					scores.push(val.score);
 				});
-				that.user.cal_score = that._calculateLeageScore(scores);
-				callback(null, user);
+				that.user.cal_score = calculateLeageScore(scores);
+				callback(null, true);
 			}
 		});
 	}
@@ -282,7 +347,7 @@ _._getClassLevel = function() {
 			"team_id": that.user.teamId
 		}], function(err, items) {
 			console.log('insertLeagueRank', err, items);
-			insertLeagueScore(user, function() {
+			insertLeagueScore(function() {
 				callback(err, items);
 			});
 		});
@@ -296,7 +361,7 @@ _._getClassLevel = function() {
 		rankObject[0].count += 1;
 		rankObject[0].save(function(err) {
 			console.log('saved and err : %s', err);
-			insertLeagueScore(user, function() {
+			insertLeagueScore(function() {
 				callback(err);
 			});
 		});
@@ -331,36 +396,36 @@ _._getClassLevel = function() {
 
 	};
 
-	var proc = function(user, rankObject, callback) {
+	var proc = function(rankObject, callback) {
 		if(rankObject.length === 1) {
 			// 클래스 레벨 업데이트
-			if(user.classId !== rankObject[0].classId) {
-				user.cal_score_before = rankObject[0].cal_score;
-				user.rankObject = rankObject;
+			if(that.user.classId !== rankObject[0].classId) {
+				that.user.cal_score_before = rankObject[0].cal_score;
+				that.user.rankObject = rankObject;
 
 				// 사용자의 레벨이 변경시 
-				makeTeam(user, function(err, teamId) {
-					user.teamId = teamId;
-					updateLeagueRank(user, rankObject, function() {
+				makeTeam(function(err, teamId) {
+					that.user.teamId = teamId;
+					updateLeagueRank(rankObject, function() {
 						callback(null, 'done');
 					});
 				});
 			} else {
-				user.classId = rankObject[0].classId;
-				user.teamId = rankObject[0].teamId;
-				user.cal_score_before = rankObject[0].cal_score;
-				user.rankObject = rankObject;
-				updateLeagueRank(user, rankObject, function() {
+				that.user.classId = rankObject[0].classId;
+				that.user.teamId = rankObject[0].teamId;
+				that.user.cal_score_before = rankObject[0].cal_score;
+				that.user.rankObject = rankObject;
+				updateLeagueRank(rankObject, function() {
 					callback(null, 'done');
 				});
 			}
 			
 		} else {
-			user.teamId = null;
-			user.cal_score_before = user.cal_score;
-			makeTeam(user, function(err, teamId) {
-				user.teamId = teamId;
-				insertLeagueRank(user, function(err, result) {
+			that.user.teamId = null;
+			that.user.cal_score_before = that.user.cal_score;
+			makeTeam(function(err, teamId) {
+				that.user.teamId = teamId;
+				insertLeagueRank(function(err, result) {
 					callback(null, 'done');
 				});
 			});
@@ -368,17 +433,22 @@ _._getClassLevel = function() {
 
 	};
 
-	return function(user, callback) {
+	return function(callback) {
 		that.model.LeagueRank.count(function(err, totalCount) {
-			that.model.LeagueRank.count({"cal_score":orm.gt(user.cal_score)}, function(err, count) {
+			that.model.LeagueRank.count({
+				cal_score: orm.gt(that.user.cal_score)
+			}, function(err, count) {
 				console.log('total rank %d/%d count', count, totalCount);
 		
-				that.model.LeagueRank.find({"user_id": user.userId, "curriculum": user.curriculum}, function(err, rankObject) {
-					that._calculateLevel(rankObject, totalCount, count, function(classId, level) {
-						user.classId = classId;
-						user.level = level;
+				that.model.LeagueRank.find({
+					user_id: that.user.userId, 
+					curriculum: that.user.curriculum
+				}, function(err, rankObject) {
+					that._calculateLevel(totalCount, count, function(classId, level) {
+						that.user.classId = classId;
+						that.user.level = level;
 						console.log('rank', JSON.stringify(rankObject, rankObject.length));	
-						proc(user, rankObject, function(err, result) {
+						proc(rankObject, function(err, result) {
 							callback(null, 'done');
 						});
 					});
@@ -390,7 +460,7 @@ _._getClassLevel = function() {
 };
 
 
-_._calculateLevel = function(rankObject, totalCount, count, callback) {
+_._calculateLevel = function(totalCount, count, callback) {
 	// 계급을 구한다 
 	var divide = totalCount / 5,
 		level = "Good";
@@ -415,60 +485,3 @@ _._calculateLevel = function(rankObject, totalCount, count, callback) {
 
 };
 
-
-_._calculateLeageScore = function(scores) {
-	console.log('arguments', scores);
-	var that = this;
-	var calculation_score = 0;
-	var lower_score = 0;
-	var lower_devision = 0;
-	var upper_score = 0;
-	var upper_devision = 0;
-	var length = scores.length;
-
-	// 가중치 계산처리 
-	scores.forEach(function(score, index) {
-		if(index <= 4) {		// 최근 5건의 평균 
-			switch(index) {
-				case 0:
-					lower_score += score * 1;
-					lower_devision += 1;
-					break;
-				case 1:
-					lower_score += score * 0.8;
-					lower_devision += 0.8;
-					break;
-				case 2:
-					lower_score += score * 0.6;
-					lower_devision += 0.6;
-					break;
-				case 3:
-					lower_score += score * 0.4;
-					lower_devision += 0.4;
-					break;
-				case 4:
-					lower_score += score * 0.2;
-					lower_devision += 0.2;
-					break;
-				default:
-					lower_score += score * 0.2;
-					lower_devision += 0.2;
-					break;
-			}
-		} else {				// 최근 5건을 넘는경우 8:2가중치를 두고 평균값을 계산한다. 
-			upper_score += score * 1;
-			upper_devision += 1;
-		}
-		console.log('before calculation', index, score, index, lower_score,  upper_score);
-	});
-	
-	if(length <= 5) {	
-		calculation_score = lower_score / lower_devision;
-	} else {
-		calculation_score = ((lower_score / lower_devision) * 0.8);
-		calculation_score += ((upper_score / upper_devision) * 0.2);
-	}
-	console.log('after calculation', length, calculation_score);
-	return calculation_score;
-
-};
