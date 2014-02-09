@@ -491,87 +491,158 @@ _._calculateLeageScore = function(scores) {
 
 _.getLeague = function(user) {
 	var that = this;
+	
+	that.user = {
+		user_id: 1,
+		curriculum: 3
+	};
 
-	that.model.LeagueRank.find({"user_id": user.id, "curriculum": user.curriculum}, function(err, Rank) {
-		async.waterfall(
-			[
-				that._getLeagueScores(Rank[0]),
-				that._getLeagueRanks(Rank[0])
-			],
-			function(err,result) {
-				if(!result) {
-					that.req.error(that.res, err);
-					return;
-				}
-				console.log('result', result);
-				//that.req.success();
+	async.series(
+		[
+			that._getUserInfo(),
+			that._getLeagueScores(),
+			that._getLeagueRanks()
+		],
+		function(err,result) {
+			if(!result) {
+				that.req.error(that.res, err);
+				return;
 			}
-		);	
-	});
+			console.log('result', result, that.ranks, that.scores, that.userInfo);
+			//that.req.success();
+		}
+	);	
 
 };
 
 
-_._getLeagueScores = function(Rank) {
+_._getUserInfo = function() {
 	var that = this;
 
-	var result = [];
 	return function(callback) {
-		that.model.LeagueScore.find({"user_id":Rank.user_id, "curriculum":Rank.curriculum}, ["created_at", "A"], function(err, scores) {
-			scores.forEach(function(score) {
-				var timestamp = new Date(score.created_at);
-				result.push({"score": score.score, "timestamp": timestamp.getTime()});
-			});
-			
-			callback(null, result);
+		that.model.LeagueRank.find({
+				user_id: that.user.user_id, 
+				curriculum: that.user.curriculum
+		}, function(err, result) {
+			if(err) {
+				that.req.error(that.res, err);
+				return;
+			}
+
+			if(result.length === 0) {
+				that.req.out('userInfo', []);
+				callback(null, true);
+				return;
+			}
+
+			that.userInfo = result[0];
+			callback(null, true);
 		});
 	};
 
 };
 
-_._getLeagueRanks = function(Rank) {
+
+_._getLeagueScores = function() {
+	var that = this;
+
+	return function(callback) {
+		that.model.LeagueScore.find({
+			user_id:that.userInfo.user_id, 
+			curriculum:that.userInfo.curriculum
+		}, ["created_at", "A"], function(err, results) {
+			if(err) {
+				that.req.error(that.res, err);
+				return;
+			}
+
+			if(results.length === 0) {
+				that.req.out('scores', []);
+				callback(null,true);
+				return;
+			}
+
+			that.scores = [];
+			results.forEach(function(val) {
+				var timestamp = new Date(val.created_at);
+				that.scores.push({"score": val.score, "timestamp": timestamp.getTime()});
+			});
+			
+			callback(null, true);
+		});
+	};
+
+};
+
+_._getLeagueRanks = function() {
 	var that = this;
 
 	var rankObj = null,
-		index = null,
-		result = {
-			"ranks": [],
-			"userInfo": {},
-			"scores": null
-		};
+		index = null
 
-	return function(scores, callback) {
-		result.scores = scores;
-		that.model.LeagueRank.find({"teamId":Rank.team_id}, ["cal_score", "Z"], function(err, Ranks) {
-			Ranks.forEach(function(r, index) {
-				result.ranks.push({
-					"difference": r.cal_score_before,
-					"rank": index+1,
-					"nickname": "nickname",
-					"score": r.cal_score,
-					"location": "location"
+	return function(callback) {
+		that.model.LeagueRank.find({
+			teamId:that.userInfo.team_id
+		}, ["cal_score", "Z"], function(err, results) {
+			if(err) {
+				that.req.error(that.res, err);
+				return;
+			}
+
+			if(results.length === 0) {
+				that.req.out('ranks', []);
+				that.req.out('userInfo', []);
+				callback(null,true);
+				return;
+			}
+
+			that.ranks = [];
+			results.forEach(function(val, index) {
+				that.ranks.push({
+					difference: val.cal_score_before,
+					rank: index+1,
+					nickname: "nickname",
+					score: val.cal_score,
+					location: "location"
 				});
-				if(r.user_id === Rank.user_id) {
-					rankObj = r;
+				if(val.user_id === that.userInfo.user_id) {
+					rankObj = val;
 					index = index+1;
 				}
 			});
 
+			if(rankObj === null)	{
+				console.log('rankObj', rankObj);
+				return callback(null, true);
+			}
 			rankObj.getTeam(function(err, Team) {
-				result.userInfo = {
-					"difference": rankObj.cal_score_before,
-					"score": rankObj.cal_score,
-					"rank": index,
-					"team": Team.name1 + Team.name2,
-					"rank_total": Team.total
+				if(err) {
+					that.req.error(that.res, err);
+					return;
+				}
+
+				that.userInfo = {
+					difference: rankObj.cal_score_before,
+					score: rankObj.cal_score,
+					rank: index,
+					team: Team.name1 + Team.name2,
+					rank_total: Team.total
 				};
+				
 				Team.getClass(function(err, Class) {
-					result.userInfo.img_url = Class.img_url;
-					callback(null, result);
+					if(err) {
+						that.req.error(that.res, err);
+						return;
+					}
+
+					that.userInfo.img_url = Class.img_url;
+					callback(null, true);
 				});
+
 			});
 
 		});
+
 	};
 
 };
