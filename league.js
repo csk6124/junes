@@ -312,15 +312,6 @@ _._getCalculateScore = function() {
 
 };
 
-
-/* 
-레벨을 구한다 .
-1. 총 랭킹 테이블의 사용자를 구한다. 
-2. 랭킹에서 자기 순위를 쿼리 
-3. class테이블 정보를 가져온다 
-4. 랭킹정보가 없다면 최상의 레벨도 등극하고 랭킹사용자 등록 
-5. 랭킹정보가 있다면 레벨을 재확인한후, 레벨이 변경시 랭킹정보와 팀정보를 갱신하여 등록한다. 
-*/
 _._getClassLevel = function() {
 	var that = this;
 
@@ -397,43 +388,6 @@ _._getClassLevel = function() {
 
 	};
 
-	var proc = function(rankObject, callback) {
-		if(rankObject.length === 1) {
-			// 클래스 레벨 업데이트
-			if(that.user.classId !== rankObject[0].classId) {
-				that.user.cal_score_before = rankObject[0].cal_score;
-				that.user.rankObject = rankObject;
-
-				// 사용자의 레벨이 변경시 
-				makeTeam(function(err, teamId) {
-					that.user.teamId = teamId;
-					updateLeagueRank(rankObject, function() {
-						callback(null, 'done');
-					});
-				});
-			} else {
-				that.user.classId = rankObject[0].classId;
-				that.user.teamId = rankObject[0].teamId;
-				that.user.cal_score_before = rankObject[0].cal_score;
-				that.user.rankObject = rankObject;
-				updateLeagueRank(rankObject, function() {
-					callback(null, 'done');
-				});
-			}
-			
-		} else {
-			that.user.teamId = null;
-			that.user.cal_score_before = that.user.cal_score;
-			makeTeam(function(err, teamId) {
-				that.user.teamId = teamId;
-				insertLeagueRank(function(err, result) {
-					callback(null, 'done');
-				});
-			});
-		}
-
-	};
-
 	return function(callback) {
 		that.model.LeagueRank.count(function(err, totalCount) {
 			that.model.LeagueRank.count({
@@ -447,15 +401,47 @@ _._getClassLevel = function() {
 				}, function(err, rankObject) {
 					that._calculateLevel(totalCount + 1, count + 1, function(classId, level) {
 						that.user.classId = classId;
-						that.user.level = level;
-						console.log('rank', JSON.stringify(rankObject, rankObject.length));	
-						proc(rankObject, function(err, result) {
-							callback(null, 'done');
-						});
+						if(rankObject.length === 1) {
+							// 클래스 레벨 업데이트
+							if(that.user.classId !== rankObject[0].classId) {
+								that.user.cal_score_before = rankObject[0].cal_score;
+								that.user.rankObject = rankObject;
+
+								makeTeam(function(err, teamId) {
+									that.user.teamId = teamId;
+									updateLeagueRank(rankObject, function() {
+										callback(null, 'done');
+									});
+								});
+							} else {
+								that.user.classId = rankObject[0].classId;
+								that.user.teamId = rankObject[0].teamId;
+								that.user.cal_score_before = rankObject[0].cal_score;
+								that.user.rankObject = rankObject;
+								updateLeagueRank(rankObject, function() {
+									callback(null, 'done');
+								});
+							}
+							
+						} else {
+							that.user.teamId = null;
+							that.user.cal_score_before = that.user.cal_score;
+							makeTeam(function(err, teamId) {
+								that.user.teamId = teamId;
+								insertLeagueRank(function(err, result) {
+									callback(null, 'done');
+								});
+							});
+						}
+
 					});
+
 				});
+
 			});
+
 		});
+
 	};
 
 };
@@ -467,7 +453,6 @@ _._calculateLevel = function(totalCount, count, callback) {
 		level = "Good";
 
 	if(divide <= 0)	divide = 1;
-
 	if(divide >= count) {
 		level = "Excellent";
 	} else if(divide * 2 >= count) {
